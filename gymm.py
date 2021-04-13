@@ -68,7 +68,7 @@ while True:
     print("min reward: " + np.min(reward_history).__str__())
 
     for index in range(episodes):
-        if(reward_history[index] > reward_treshold):
+        if(reward_history[index] >= reward_treshold):
             best_obs.append(obs_history[index])
             best_action_prob.append(action_prob_history[index])
             batches += 1
