@@ -6,12 +6,10 @@ import copy
 import collections
 
 env = gym.make('CartPole-v0')
-loss_function = tf.keras.losses.MeanSquaredError(from_logits=True,reduction=tf.keras.losses.Reduction.NONE)
+loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 optimizer = tf.optimizers.Adam(learning_rate=0.01)
 PERCENTILE = 70
 max_steps = 2000
-
-#log_file.write('!--------------------------------------!\n')
 
 class myModel(keras.Model):
     def __init__(self, input_shape, output_shape):
