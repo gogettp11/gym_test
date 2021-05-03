@@ -8,11 +8,12 @@ import random
 
 env = gym.make('CartPole-v0')
 loss_function = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)
-optimizer = tf.optimizers.Adam(learning_rate=0.01)
+optimizer = tf.optimizers.Adam(learning_rate=0.001)
 BUFFER_SIZE = 500
 max_steps = 2000
 MIN_EPSILON = 0.05
-Experience = collections.namedtuple('Experience', field_names=['state', 'action', 'reward', 'next_state'])
+GAMMA = 0.9
+Experience = collections.namedtuple('Experience', field_names=['state', 'action', 'reward', 'next_state','done'])
 
 class myModel(keras.Model):
     def __init__(self, input_shape, output_shape):
@@ -31,10 +32,13 @@ class ExperienceBuffer():
         self.buffer = collections.deque(maxlen=capacity)
         self.mem_pointer = 0
     def append(self, experience): #insert element to the circular buffer
-        buffer.insert(mem_pointer%buffer.maxlen,namedtuple)
+        buffer.insert(mem_pointer%buffer.maxlen,experience)
     def sample(self, n_samples): #return random samples from buffer
         indices = np.random.choice(len(self.buffer), n_samples, replace=False)
-        return [buffer[i].state for i in indices],[buffer[i].action for i in indices],[buffer[i].reward for i in indices],[buffer[i].next_state for i in indices]
+        return [buffer[i].state for i in indices],[buffer[i].action for i in indices],
+        [buffer[i].reward for i in indices],[buffer[i].next_state for i in indices], [buffer[i].done for i in indices]
+    def samples_num():
+        return mem_pointer
         
 
 class Agent():
@@ -42,11 +46,12 @@ class Agent():
         self.target_net = target_net
         self.training_net = training_net
         self.env = env
-        self.experience_buffer = ExperienceBuffer()
+        self.experience_buffer = ExperienceBuffer(BUFFER_SIZE)
         self.optimizer = optimizer
         self.loss_function = loss_function
         self.epsilon = 1.00 # default probability for taking random steps
         self.observation = env.reset()
+        self.total_reward = 0
 
     def play_step(self):
         if epsilon > random.random:
@@ -57,108 +62,31 @@ class Agent():
             action = env.action_space.sample()
 
         next_observation, reward, done, info = env.step(action)
-        experience_buffer.append(Experience(observation,action,reward,next_observation))
+        total_reward += reward
+        experience_buffer.append(Experience(observation,action,reward,next_observation,done))
 
         if done:
             next_observation = env.reset()
+            return self.total_reward
 
         observation = next_observation
-        return done
 
     def decrease_epsilon():
         if MIN_EPSILON < epsilon:
             epsilon -= 0.015
 
     def training():
-        raw_state, raw_action, raw_reward, raw_next_state = experience_buffer.sample(20) #hardcoded 20 because why not
-        with tf.GradientTape() as tape:
-            training_net
-
-        
-
+        if self.experience_buffer.samples_num > BUFFER_SIZE:
+            raw_state, raw_action, raw_reward, raw_next_state, dones = experience_buffer.sample(20) #hardcoded 20 because why not
+            updated_q_values = tf.math.max(target_net(raw_next_state),1)*GAMMA + raw_reward
+            #TODO dont count q_values for dones
+            with tf.GradientTape() as tape:
+                q_values = training_net(tf.Variable(raw_state))
+                loss = loss_function(updated_q_values ,q_values)
+            gradients = tape.gradient(training_net.trainable_weights, loss)
+            optimizer.apply_gradients(training_net.trainable_weights, gradients)
+    def test_run():
+        pass
 
 if name == '__main__':
     pass
-model_training = myModel(env.observation_space.shape[0],env.action_space.n)
-model_target = myModel(env.observation_space.shape[0],env.action_space.n)
-
-episodes = 16
-softmax_l = keras.layers.Softmax()
-
-
-obs_history = []
-reward_history = []
-action_prob_history = []
-
-while True:
-# getting data for training
-    for i_episode in range(episodes):
-        observation = env.reset()
-        ep_obs = []
-        ep_action = []
-        ep_reward = 0
-        for t in range(max_steps):
-
-            ep_obs.append(observation)
-
-            obs = tf.constant(observation, shape=(1, len(observation)))
-            action_prob = model(obs)
-            action_prob_softmax = softmax_l(action_prob)
-            action = np.random.choice(len(np.squeeze(action_prob)),p=np.squeeze(action_prob_softmax))
-
-            observation, reward, done, info = env.step(action)
-            ep_action.append(action)
-            ep_reward += reward
-            if done:
-                reward_history.append(ep_reward)
-                obs_history.append(ep_obs)
-                action_prob_history.append(ep_action)
-                break
-# filtering the best attempts from batch
-    reward_treshold = np.percentile(reward_history, PERCENTILE)
-    best_obs = []
-    best_action_prob = []
-    batches = 0
-
-    print("mean reward: " + np.mean(reward_history).__str__())
-    print("max reward: " + np.max(reward_history).__str__())
-    print("min reward: " + np.min(reward_history).__str__())
-
-    for index in range(episodes):
-        if(reward_history[index] >= reward_treshold):
-            best_obs.append(obs_history[index])
-            best_action_prob.append(action_prob_history[index])
-            batches += 1
-    #clear history
-    print("training examples: " + batches.__str__())
-    reward_history.clear()
-    obs_history.clear()
-    action_prob_history.clear()
-
-#training
-    for i in range(batches):
-        with tf.GradientTape() as tape:
-            action_prob = model(tf.constant(best_obs[i]))
-            loss = loss_function(best_action_prob[i], action_prob)
-        # Backpropagation
-        grads = tape.gradient(loss, model.trainable_variables)
-        optimizer.apply_gradients(zip(grads, model.trainable_variables))
-# test run
-    test_obs = env.reset()
-    test_run_reward=0
-    for i in range(max_steps):
-        env.render()
-        action_prob = softmax_l(model(tf.constant(test_obs, shape=(1, len(observation)))))
-        action_prob = np.squeeze(action_prob)
-        action = np.random.choice(len(action_prob), p=action_prob)
-        observation, reward, done, info = env.step(action)
-        test_obs = observation
-        test_run_reward+=reward
-        if(done):
-            print("test reward: " + test_run_reward.__str__() + '\n')
-            break
-
-    if reward > 190:
-        break
-      
-env.close()
