@@ -1,6 +1,12 @@
-import torch
+import tensorflow as tf
 
-t1 = torch.Tensor([[1,2,3,4],[5,6,7,8]])
-t2 = torch.unsqueeze(torch.Tensor([1,3]),1).type(torch.int64)
-print(t2)
-print(torch.gather(t1, 1, t2))
+# v1 = tf.Variable([1,2], dtype=tf.float32)
+# x = 0.5
+# y = [0.1, 0.2]
+# print(v1*x + y)
+
+t1 = tf.Variable(initial_value=1.0)
+l1 = [0,1]
+
+print(tf.Variable(t1.numpy() ,dtype=tf.float32))
+print(t1)
